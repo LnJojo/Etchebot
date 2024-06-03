@@ -103,7 +103,7 @@ async def rank_restos(ctx):
         await ctx.send("Aucune compétition active. Lance une nouvelle compétition avec !newCompetition.")
 
 # Démarrer le bot Discord
-bot.run(bot_token)
+bot.run(bot_token) 
 
 # Fermer la connexion à la base de données PostgreSQL
 conn.close()
