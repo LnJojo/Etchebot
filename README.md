@@ -1,7 +1,7 @@
 # Etchebot
 
 ## Description
-Etchebot est un bot Discord conçu pour permettre aux utilisateurs de noter et classer des restaurants avec leurs amis sur un serveur Discord. Inspiré de l'émission "Un dîner presque parfait", Etchebot aide les gens à découvrir et partager des restaurants tout en s'amusant.
+Etchebot est un bot discord qui va permettre à vous et vos amis sur les serveurs de partager des restaurants. Vous allez pouvoir noter et classer les restaurants proposés par les participants d'une compétition, donnant un peu d'enjeu pour vos sorties entre ami(e)s.
 
 ## Fonctionnalités
 - Ajouter un restaurant avec un lien Google Maps.
