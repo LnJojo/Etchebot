@@ -5,7 +5,7 @@ import psycopg2
 from psycopg2 import sql
 from psycopg2.extras import RealDictCursor
 
-# Récupération des informations de connexion
+# Récupérer les informations de connexion depuis les variables d'environnement
 db_url = os.getenv('DATABASE_URL')
 bot_token = os.getenv('DISCORD_TOKEN')
 
@@ -14,18 +14,22 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-# Fonction pour obtenir une connexion à la base de données
 def get_db_connection():
+    if not db_url:
+        raise ValueError("La variable d'environnement DATABASE_URL n'est pas définie.")
     return psycopg2.connect(db_url, cursor_factory=RealDictCursor)
 
-# Fonction pour exécuter une requête avec gestion d'erreurs
 def execute_query(query, params=None):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
             cur.execute(query, params)
             conn.commit()
-            return cur.fetchall()
+            try:
+                return cur.fetchall()
+            except psycopg2.ProgrammingError:
+                # La requête ne retourne pas de résultats
+                return None
     except Exception as e:
         print(f"Erreur de base de données : {e}")
         conn.rollback()
@@ -33,7 +37,19 @@ def execute_query(query, params=None):
     finally:
         conn.close()
 
-# Création des tables
+def execute_query_no_result(query, params=None):
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(query, params)
+            conn.commit()
+    except Exception as e:
+        print(f"Erreur de base de données : {e}")
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
 def create_tables():
     queries = [
         '''CREATE TABLE IF NOT EXISTS restos (
@@ -57,14 +73,12 @@ def create_tables():
         )'''
     ]
     for query in queries:
-        execute_query(query)
-
-create_tables()
+        execute_query_no_result(query)
 
 @bot.command(name='addResto')
 async def add_resto(ctx, resto_name, google_maps_link):
     try:
-        execute_query("INSERT INTO restos (name, google_maps_link) VALUES (%s, %s)", (resto_name, google_maps_link))
+        execute_query_no_result("INSERT INTO restos (name, google_maps_link) VALUES (%s, %s)", (resto_name, google_maps_link))
         await ctx.send(f"Resto '{resto_name}' ajouté avec succès.")
     except psycopg2.errors.UniqueViolation:
         await ctx.send(f"Le resto '{resto_name}' existe déjà.")
@@ -91,7 +105,6 @@ async def rate_resto(ctx, resto_name, rating: float, *, comment=""):
 
         competition_id = competition[0]['id']
         
-        # Vérifier si l'utilisateur a déjà noté ce restaurant dans cette compétition
         existing_rating = execute_query(
             "SELECT id FROM ratings WHERE resto_id = %s AND user_id = %s AND competition_id = %s",
             (resto_id, ctx.author.id, competition_id)
@@ -100,7 +113,7 @@ async def rate_resto(ctx, resto_name, rating: float, *, comment=""):
             await ctx.send("Vous avez déjà noté ce restaurant dans cette compétition.")
             return
 
-        execute_query(
+        execute_query_no_result(
             "INSERT INTO ratings (resto_id, user_id, rating, comment, competition_id) VALUES (%s, %s, %s, %s, %s)",
             (resto_id, ctx.author.id, rating, comment, competition_id)
         )
@@ -111,8 +124,8 @@ async def rate_resto(ctx, resto_name, rating: float, *, comment=""):
 @bot.command(name='newCompet')
 async def new_competition(ctx):
     try:
-        execute_query("UPDATE competitions SET active = FALSE WHERE active = TRUE")
-        execute_query("INSERT INTO competitions (active) VALUES (TRUE)")
+        execute_query_no_result("UPDATE competitions SET active = FALSE WHERE active = TRUE")
+        execute_query_no_result("INSERT INTO competitions (active) VALUES (TRUE)")
         await ctx.send("Nouvelle compétition lancée.")
     except Exception as e:
         await ctx.send(f"Une erreur est survenue : {str(e)}")
@@ -120,7 +133,7 @@ async def new_competition(ctx):
 @bot.command(name='stopCompet')
 async def stop_competition(ctx):
     try:
-        execute_query("UPDATE competitions SET active = FALSE WHERE active = TRUE")
+        execute_query_no_result("UPDATE competitions SET active = FALSE WHERE active = TRUE")
         await ctx.send("Compétition arrêtée.")
     except Exception as e:
         await ctx.send(f"Une erreur est survenue : {str(e)}")
@@ -185,5 +198,17 @@ async def show_podium(ctx):
     except Exception as e:
         await ctx.send(f"Une erreur est survenue : {str(e)}")
 
-# Démarrer le bot Discord
-bot.run(bot_token)
+def test_db_connection():
+    try:
+        conn = get_db_connection()
+        print("Connexion à la base de données réussie!")
+        conn.close()
+    except Exception as e:
+        print(f"Erreur de connexion à la base de données: {e}")
+
+if __name__ == "__main__":
+    print("Démarrage du bot...")
+    test_db_connection()
+    create_tables()
+    print("Tables créées avec succès!")
+    bot.run(bot_token)
